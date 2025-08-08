@@ -1,5 +1,5 @@
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from urllib.parse import urlparse
 
 import psycopg2
@@ -37,7 +37,19 @@ def ensure_user(telegram_id: int, username: Optional[str], first_name: Optional[
             (telegram_id, username, first_name),
         )
         row = cur.fetchone()
-        return int(row['id'])
+        user_id = int(row['id'])
+        
+        # Создаем запись статистики если её нет
+        cur.execute(
+            """
+            INSERT INTO user_statistics (user_id)
+            VALUES (%s)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            (user_id,),
+        )
+        
+        return user_id
 
 
 # Функции для работы со словарем и пользовательскими словами
@@ -131,7 +143,80 @@ def pick_question_with_options(user_id: int) -> Optional[Tuple[str, str, List[st
 def record_attempt(user_id: int, word_en: str, was_correct: bool) -> None:
     """Запись попытки ответа в базу данных"""
     with _connect() as conn, conn.cursor() as cur:
+        # Записываем попытку
         cur.execute(
             "INSERT INTO quiz_attempts (user_id, word_en, was_correct) VALUES (%s, %s, %s)",
             (user_id, word_en, was_correct),
+        )
+        
+        # Обновляем статистику
+        if was_correct:
+            cur.execute(
+                """
+                UPDATE user_statistics 
+                SET total_attempts = total_attempts + 1,
+                    correct_attempts = correct_attempts + 1,
+                    current_streak = current_streak + 1,
+                    best_streak = CASE 
+                        WHEN current_streak + 1 > best_streak THEN current_streak + 1 
+                        ELSE best_streak 
+                    END,
+                    last_activity = NOW()
+                WHERE user_id = %s
+                """,
+                (user_id,),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE user_statistics 
+                SET total_attempts = total_attempts + 1,
+                    incorrect_attempts = incorrect_attempts + 1,
+                    current_streak = 0,
+                    last_activity = NOW()
+                WHERE user_id = %s
+                """,
+                (user_id,),
+            )
+
+
+# Функции для работы со статистикой
+
+def get_user_statistics(user_id: int) -> Optional[Dict]:
+    """Получение статистики пользователя"""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT total_attempts, correct_attempts, incorrect_attempts, 
+                   current_streak, best_streak, last_activity
+            FROM user_statistics
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone()
+        if row:
+            return {
+                'total_attempts': row['total_attempts'],
+                'correct_attempts': row['correct_attempts'],
+                'incorrect_attempts': row['incorrect_attempts'],
+                'current_streak': row['current_streak'],
+                'best_streak': row['best_streak'],
+                'last_activity': row['last_activity'],
+                'success_rate': round((row['correct_attempts'] / row['total_attempts'] * 100) if row['total_attempts'] > 0 else 0, 1)
+            }
+        return None
+
+
+def reset_user_statistics(user_id: int) -> None:
+    """Сброс статистики пользователя"""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE user_statistics 
+            SET total_attempts = 0, correct_attempts = 0, incorrect_attempts = 0,
+                current_streak = 0, best_streak = 0, last_activity = NOW()
+            WHERE user_id = %s
+            """,
+            (user_id,),
         ) 

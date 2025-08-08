@@ -7,7 +7,7 @@ from telebot import types
 
 from .config import TELEGRAM_BOT_TOKEN
 from . import db
-from .keyboards import main_menu, options_keyboard, cancel_keyboard
+from .keyboards import main_menu, options_keyboard, cancel_keyboard, statistics_menu, statistics_during_game_menu
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(message)s')
@@ -34,6 +34,20 @@ def get_state(chat_id: int) -> UserState:
     return user_states[chat_id]
 
 
+def format_statistics(stats: Dict) -> str:
+    """Форматирование статистики для отображения"""
+    return (
+        f"📊 <b>Ваша статистика:</b>\n\n"
+        f"🎯 Всего попыток: <b>{stats['total_attempts']}</b>\n"
+        f"✅ Правильных ответов: <b>{stats['correct_attempts']}</b>\n"
+        f"❌ Неправильных ответов: <b>{stats['incorrect_attempts']}</b>\n"
+        f"📈 Процент успеха: <b>{stats['success_rate']}%</b>\n"
+        f"🔥 Текущая серия: <b>{stats['current_streak']}</b>\n"
+        f"🏆 Лучшая серия: <b>{stats['best_streak']}</b>\n"
+        f"🕐 Последняя активность: <b>{stats['last_activity'].strftime('%d.%m.%Y %H:%M')}</b>"
+    )
+
+
 @bot.message_handler(commands=['start'])
 def handle_start(message: types.Message):
     """Обработчик команды /start"""
@@ -44,6 +58,7 @@ def handle_start(message: types.Message):
         "Привет 👋 Давай попрактикуемся в английском языке.\n\n"
         "Ты можешь использовать тренажёр как конструктор и собирать свою базу для обучения.\n"
         "Воспользуйся инструментами: добавить слово ➕, удалить слово 🔙.\n\n"
+        "📊 Отслеживай свой прогресс в разделе статистики!\n\n"
         "Ну что, начнём ⬇️"
     )
     bot.send_message(message.chat.id, welcome, reply_markup=main_menu())
@@ -55,6 +70,127 @@ def handle_start_training(message: types.Message):
     state = get_state(message.chat.id)
     state.mode = 'quiz'
     ask_question(message)
+
+
+@bot.message_handler(func=lambda m: m.text == '📊 Статистика')
+def handle_statistics(message: types.Message):
+    """Обработчик кнопки 'Статистика' - определяет контекст и показывает соответствующее меню"""
+    state = get_state(message.chat.id)
+    user_db_id = db.ensure_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
+    stats = db.get_user_statistics(user_db_id)
+    
+    # Определяем, находимся ли мы в режиме игры
+    is_during_game = state.mode == 'quiz' and state.pending_correct_en is not None
+    
+    if stats and stats['total_attempts'] > 0:
+        if is_during_game:
+            # Во время игры - показываем меню с кнопкой "Продолжить"
+            bot.send_message(message.chat.id, format_statistics(stats), reply_markup=statistics_during_game_menu())
+        else:
+            # Обычное меню статистики
+            bot.send_message(message.chat.id, format_statistics(stats), reply_markup=statistics_menu())
+    else:
+        if is_during_game:
+            bot.send_message(
+                message.chat.id, 
+                "📊 У вас пока нет статистики. Продолжайте тренировку!",
+                reply_markup=statistics_during_game_menu()
+            )
+        else:
+            bot.send_message(
+                message.chat.id, 
+                "📊 У вас пока нет статистики. Начните тренировку, чтобы накопить данные!",
+                reply_markup=statistics_menu()
+            )
+
+
+@bot.message_handler(func=lambda m: m.text == '🔄 Сбросить статистику')
+def handle_reset_statistics(message: types.Message):
+    """Обработчик кнопки 'Сбросить статистику'"""
+    user_db_id = db.ensure_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
+    db.reset_user_statistics(user_db_id)
+    bot.send_message(
+        message.chat.id, 
+        "🔄 Статистика сброшена! Начните заново для накопления новых данных.",
+        reply_markup=main_menu()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == '📈 Детальная статистика')
+def handle_detailed_statistics(message: types.Message):
+    """Обработчик кнопки 'Детальная статистика'"""
+    user_db_id = db.ensure_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
+    stats = db.get_user_statistics(user_db_id)
+    
+    if stats and stats['total_attempts'] > 0:
+        detailed_stats = (
+            f"📈 <b>Детальная статистика:</b>\n\n"
+            f"🎯 <b>Общие показатели:</b>\n"
+            f"   • Всего попыток: {stats['total_attempts']}\n"
+            f"   • Правильных: {stats['correct_attempts']}\n"
+            f"   • Неправильных: {stats['incorrect_attempts']}\n\n"
+            f"📊 <b>Процентные показатели:</b>\n"
+            f"   • Успешность: {stats['success_rate']}%\n"
+            f"   • Ошибки: {100 - stats['success_rate']:.1f}%\n\n"
+            f"🔥 <b>Серии ответов:</b>\n"
+            f"   • Текущая серия: {stats['current_streak']}\n"
+            f"   • Лучшая серия: {stats['best_streak']}\n\n"
+            f"🕐 Последняя активность: {stats['last_activity'].strftime('%d.%m.%Y в %H:%M')}"
+        )
+        bot.send_message(message.chat.id, detailed_stats, reply_markup=statistics_menu())
+    else:
+        bot.send_message(
+            message.chat.id, 
+            "📈 У вас пока нет данных для детальной статистики.",
+            reply_markup=statistics_menu()
+        )
+
+
+@bot.message_handler(func=lambda m: m.text == '⏹ Остановить игру')
+def handle_stop_game(message: types.Message):
+    """Обработчик кнопки 'Остановить игру'"""
+    state = get_state(message.chat.id)
+    state.mode = None
+    state.pending_correct_en = None
+    
+    user_db_id = db.ensure_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
+    stats = db.get_user_statistics(user_db_id)
+    
+    if stats and stats['total_attempts'] > 0:
+        session_stats = (
+            f"⏹ <b>Игра остановлена!</b>\n\n"
+            f"📊 <b>Результаты сессии:</b>\n"
+            f"   • Правильных ответов: {stats['correct_attempts']}\n"
+            f"   • Неправильных ответов: {stats['incorrect_attempts']}\n"
+            f"   • Процент успеха: {stats['success_rate']}%\n"
+            f"   • Лучшая серия: {stats['best_streak']}\n\n"
+            f"Отличная работа! 🎉"
+        )
+        bot.send_message(message.chat.id, session_stats, reply_markup=main_menu())
+    else:
+        bot.send_message(message.chat.id, "⏹ Игра остановлена!", reply_markup=main_menu())
+
+
+
+
+
+@bot.message_handler(func=lambda m: m.text == '▶️ Продолжить игру')
+def handle_continue_game(message: types.Message):
+    """Обработчик кнопки 'Продолжить игру'"""
+    state = get_state(message.chat.id)
+    if state.mode == 'quiz':
+        ask_question(message)
+    else:
+        bot.send_message(message.chat.id, "🏠 Главное меню:", reply_markup=main_menu())
+
+
+@bot.message_handler(func=lambda m: m.text == '🏠 Главное меню')
+def handle_main_menu(message: types.Message):
+    """Обработчик кнопки 'Главное меню'"""
+    state = get_state(message.chat.id)
+    state.mode = None
+    state.pending_correct_en = None
+    bot.send_message(message.chat.id, "🏠 Главное меню:", reply_markup=main_menu())
 
 
 def ask_question(message: types.Message):

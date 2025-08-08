@@ -36,4 +36,17 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     word_en      TEXT NOT NULL,
     was_correct  BOOLEAN NOT NULL,
     attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- User statistics for tracking progress
+CREATE TABLE IF NOT EXISTS user_statistics (
+    id                    SERIAL PRIMARY KEY,
+    user_id               INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    total_attempts        INTEGER NOT NULL DEFAULT 0,
+    correct_attempts      INTEGER NOT NULL DEFAULT 0,
+    incorrect_attempts    INTEGER NOT NULL DEFAULT 0,
+    current_streak        INTEGER NOT NULL DEFAULT 0,
+    best_streak           INTEGER NOT NULL DEFAULT 0,
+    last_activity         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id)
 ); 

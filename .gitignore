@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# Configuration files with sensitive data
+config.txt
+config.ini
+secrets.txt
+
+# Byte-compiled / optimized / DLL files
+*.so
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+.coverage.*
+
+# PyInstaller
+build/
+dist/
+
+# Database dumps
+*.sql.dump 

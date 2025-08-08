@@ -1,0 +1,12 @@
+# Конфигурация Telegram-бота EnglishCard
+# Скопируйте этот файл в config.txt и укажите ваш токен
+
+# Токен бота (получите у @BotFather)
+BOT_TOKEN=ВАШ_ТОКЕН_БОТА_ЗДЕСЬ
+
+# Настройки базы данных
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=englishcard
+DB_USER=englishcard
+DB_PASSWORD=englishcard

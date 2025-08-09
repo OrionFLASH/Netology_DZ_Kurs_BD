@@ -6,9 +6,9 @@ from typing import Dict, Optional
 import telebot
 from telebot import types
 
-from .config import TELEGRAM_BOT_TOKEN
-from . import db
-from .keyboards import main_menu, options_keyboard, cancel_keyboard, statistics_menu, statistics_during_game_menu
+from config import TELEGRAM_BOT_TOKEN
+import db
+from keyboards import main_menu, options_keyboard, cancel_keyboard, statistics_menu, statistics_during_game_menu
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(message)s')
@@ -359,8 +359,8 @@ def handle_text(message: types.Message):
 if __name__ == '__main__':
     try:
         # Импортируем утилиты для безопасного запуска
-        from .startup_utils import safe_startup_check
-        from .config import DB_URL
+        from startup_utils import safe_startup_check
+        from config import DB_URL
         
         logger.info('🚀 Инициализация безопасного запуска бота...')
         
@@ -391,7 +391,7 @@ if __name__ == '__main__':
             
         elif "psycopg2" in str(e) or "database" in str(e).lower():
             print("\n🔧 ОШИБКА БАЗЫ ДАННЫХ")
-            from .startup_utils import print_postgresql_help
+            from startup_utils import print_postgresql_help
             print_postgresql_help()
             
         elif "connection" in str(e).lower():

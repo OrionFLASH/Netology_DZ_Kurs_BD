@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from .config import DB_URL
+from config import DB_URL
 
 
 def _connect():
